@@ -8,7 +8,6 @@
 using namespace boost::interprocess;
 
 int main() {
-
   // Erase previous shared memory and schedule erasure on exit
   struct shm_remove {
     shm_remove() { shared_memory_object::remove("MySharedMemory"); }
@@ -35,17 +34,18 @@ int main() {
     // Construct the shared structure in memory
     trace_queue *data = new (addr) trace_queue;
 
-    const int NumMsg = 100;
+    const int NumMsg = 10;
 
     for (int i = 0; i < NumMsg; ++i) {
       scoped_lock<interprocess_mutex> lock(data->mutex);
       if (data->message_in) {
         data->cond_full.wait(lock);
       }
-      if (i == (NumMsg - 1))
+      if (i == NumMsg - 1) {
         std::sprintf(data->items, "%s", "last message");
-      else
+      } else {
         std::sprintf(data->items, "%s_%d", "my_trace", i);
+      }
 
       // Notify to the other process that there is a message
       data->cond_empty.notify_one();
