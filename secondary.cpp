@@ -1,4 +1,6 @@
 #include "doc_anonymous_condition_shared_data.hpp"
+
+#include <boost/interprocess/ipc/message_queue.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/sync/scoped_lock.hpp>
@@ -7,12 +9,15 @@
 
 using namespace boost::interprocess;
 
+const char *kSharedMemoryName = "MySharedMemory";
+const char *kMessageQueueName = "message_queue";
+
 int main() {
   // Create a shared memory object.
-  shared_memory_object shm(open_only,        // only create
-                           "MySharedMemory", // name
-                           read_write        // read-write mode
-  );
+  shared_memory_object shm(open_only, kSharedMemoryName, read_write);
+
+  // Open a message queue.
+  message_queue mq(open_only, kMessageQueueName);
 
   try {
     // Map the whole shared memory in this process
@@ -24,25 +29,28 @@ int main() {
     void *addr = region.get_address();
 
     // Obtain a pointer to the shared structure
-    trace_queue *data = static_cast<trace_queue *>(addr);
+    client_queue *data = static_cast<client_queue *>(addr);
 
-    // Print messages until the other process marks the end
-    bool end_loop = false;
-    do {
+    data->cond_wait_client_connection.notify_one();
+
+    {
       scoped_lock<interprocess_mutex> lock(data->mutex);
-      if (!data->message_in) {
-        data->cond_empty.wait(lock);
+
+      data->cond_wait_server_response.wait(lock);
+
+      unsigned int priority;
+      message_queue::size_type recvd_size;
+
+      // Receive 10 numbers
+      for (int i = 0; i < 10; ++i) {
+        int number;
+        mq.receive(&number, sizeof(number), recvd_size, priority);
+        if (number != i || recvd_size != sizeof(number)) {
+          return 1;
+        }
+        std::cout << "Receiving message: " << number << std::endl;
       }
-      if (std::strcmp(data->items, "last message") == 0) {
-        end_loop = true;
-      } else {
-        // Print the message
-        std::cout << data->items << std::endl;
-        // Notify the other process that the buffer is empty
-        data->message_in = false;
-        data->cond_full.notify_one();
-      }
-    } while (!end_loop);
+    }
   } catch (interprocess_exception &ex) {
     std::cout << ex.what() << std::endl;
     return 1;

@@ -1,23 +1,10 @@
 #include <boost/interprocess/sync/interprocess_condition.hpp>
 #include <boost/interprocess/sync/interprocess_mutex.hpp>
 
-struct trace_queue {
-  enum { LineSize = 100 };
+struct client_queue {
+  client_queue() {}
 
-  trace_queue() : message_in(false) {}
-
-  // Mutex to protect access to the queue
   boost::interprocess::interprocess_mutex mutex;
-
-  // Condition to wait when the queue is empty
-  boost::interprocess::interprocess_condition cond_empty;
-
-  // Condition to wait when the queue is full
-  boost::interprocess::interprocess_condition cond_full;
-
-  // Items to fill
-  char items[LineSize];
-
-  // Is there any message
-  bool message_in;
+  boost::interprocess::interprocess_condition cond_wait_server_response;
+  boost::interprocess::interprocess_condition cond_wait_client_connection;
 };
